@@ -488,4 +488,4 @@ synchronized(x) {
 	x.notifyAll()
 }
 ```
-In the example with tea creating these methods where called inside the synchronized inside the method, that automatically synchronizes code by `this`.
+In the example with tea creating these methods where called inside the synchronized method, that automatically synchronizes code by `this`.
