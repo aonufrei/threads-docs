@@ -8,9 +8,10 @@ Plan:
     - Synchronize and Lock
     - Volatile and Atomic
     - Wait(), Notify() and NotifyAll()
-    - Scheduled Executor
     - Blocking queues
-    - Concurrency
+    - Concurrency classes
+
+TODO: BlockingQueues, Introduction, Conclusion;
 
 # Multithreading in Java
 
@@ -212,11 +213,9 @@ We created the `UncaughtExceptionHandler` class (but you can use lambda instead)
 
 This way, the exception is caught by our handler and processed.
 
-## Blocking
-
+## Synchronize and Lock
 When the threads are performing some tasks, it is important to guarantee some resources used by it to not be changed by other thread, because it can cause the code to behave unexpectedly. Java provides mechanisms of blocking the part of code so that only one Thread can access some particular method or resource at time.
 
-### Synchronize and Lock
 Lets review the following example:
 
 ```java
@@ -355,9 +354,7 @@ It is `lock()` method blocks the part of code from other threads and `unlock()` 
 
 In most cases, it is recommended to use `synchronized` over `Lock`, as it is more secure and is easier to read.
 
-### Volatile and Atomic
-
-### Wait(), Notify() and NotifyAll()
+## Wait(), Notify() and NotifyAll()
 
 In some cases you'd like to implement one task using multiple threads. For example, you are modelling the process of creating a tea. The steps of creating a tea are:
 1. Pick up a cup
@@ -488,4 +485,243 @@ synchronized(x) {
 	x.notifyAll()
 }
 ```
-In the example with tea creating these methods where called inside the synchronized method, that automatically synchronizes code by `this`.
+In the example with tea creating these methods where called inside the synchronized methods.
+
+## Blocking queue
+
+## Concurrency classes
+`java.util.concurrent` library provide developer with new classes that can be used to ease the process of creating multithreading application. Lets review some of them.
+
+### CountDownLatch
+CountDownLatch object can be used to set some kind of a countdown and force the threads to wait until the it is out.
+
+Lets review the code example:
+```java
+public class CountDownLatchExample {
+
+	private static final Integer NUMBER_OF_THREADS_TO_REQUIRE = 5;
+
+	public static void main(String[] args) {
+		CountDownLatch countDownLatch = new CountDownLatch(NUMBER_OF_THREADS_TO_REQUIRE);
+		ExecutorService executor = Executors.newFixedThreadPool(3);
+		Future<?> lastTask = executor.submit(createTaskToDoAfterCountDown(countDownLatch));
+		for (int i = 0; i < NUMBER_OF_THREADS_TO_REQUIRE; i++) {
+			executor.execute(createTask(countDownLatch, i));
+		}
+
+		while (!lastTask.isDone()) {
+			executor.shutdown();
+		}
+	}
+
+	private static Runnable createTaskToDoAfterCountDown(CountDownLatch countDownLatch) {
+		return () -> {
+			try {
+				countDownLatch.await();
+				System.out.println("All tasks are completed");
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		};
+	}
+
+	private static Runnable createTask(CountDownLatch countDownLatch, Integer id) {
+		return () -> {
+			try {
+				Thread.sleep(1000);
+				System.out.println("Task " + id + " has finished");
+				countDownLatch.countDown();
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		};
+	}
+}
+// output
+/*
+Task 1 has finished
+Task 0 has finished
+Task 3 has finished
+Task 2 has finished
+Task 4 has finished
+All tasks are completed
+*/
+```
+
+In this example `CountDownLatch` is used to wait till the the specific number of tasks will be finished. `await()` blocks the execution of the thread till the countdown is out. `countDown()` reduces the countdown by one. To reset the countdown you need to create new instance of the class.
+
+### CyclicBarrier
+
+`CyclicBarrier` is very similar to `CountDownLatch` but can be used multiple times. The constructor is very simple. It takes the number of threads that must call `await()` till the thread will be unblocked;
+```java
+public CyclicBarrier(int parties)
+```
+Optionally, you can pass the second argument to the constructor, which is a Runnable instance. This way, runnable will be executed when the last thread call `await()` method.
+
+Lets see the example:
+```java
+public class CyclicBarrierExample {
+
+	private static final Integer NUMBER_OF_THREADS_TO_REQUIRE = 5;
+
+	public static void main(String[] args) {
+		CyclicBarrier cyclicBarrier = new CyclicBarrier(NUMBER_OF_THREADS_TO_REQUIRE, () -> {
+			System.out.println("Time to unblock threads");
+		});
+		ExecutorService executor = Executors.newCachedThreadPool();
+		List<Future<?>> tasks = new LinkedList<>();
+		for (int i = 0; i < NUMBER_OF_THREADS_TO_REQUIRE; i++) {
+			tasks.add(executor.submit(createTask(cyclicBarrier, i)));
+		}
+		while (true) {
+			if (tasks.stream().allMatch(Future::isDone)) {
+				executor.shutdown();
+				break;
+			}
+		}
+	}
+
+	private static Runnable createTask(CyclicBarrier cyclicBarrier, Integer id) {
+		return () -> {
+			try {
+				Thread.sleep(1000);
+				System.out.println("Task " + id + " is on hold");
+				cyclicBarrier.await();
+				System.out.println("Task " + id + " finished");
+			} catch (InterruptedException | BrokenBarrierException e) {
+				System.out.println("Oops");
+			}
+		};
+	}
+
+}
+```
+The threads are blocked thill the required thread number are not waiting.
+
+### Semaphore
+When `Lock` and `synchronized` allows access to resource only to one thread at time, `Semaphore` can be used to do it for multiple threads.
+
+Lets illustrate the work of `Semaphore` by developing a simple bicycle renting program.
+```java
+public class SemaphoreExample {
+
+	private static final Integer NUMBER_OF_BICYCLES = 3;
+
+	public static void main(String[] args) {
+		Semaphore semaphore = new Semaphore(NUMBER_OF_BICYCLES);
+		ExecutorService executor = Executors.newCachedThreadPool();
+		List<Runnable> rents = Arrays.asList(
+				createBicycleRent(semaphore, "Aragorn"),
+				createBicycleRent(semaphore, "Legolas"),
+				createBicycleRent(semaphore, "Gimli"),
+				createBicycleRent(semaphore, "Boromir"),
+				createBicycleRent(semaphore, "Frodo"),
+				createBicycleRent(semaphore, "Sam"),
+				createBicycleRent(semaphore, "Pippin"),
+				createBicycleRent(semaphore, "Merry"),
+				createBicycleRent(semaphore, "Gandalf")
+		);
+		List<Future<?>> finishedRents = rents.stream().map(executor::submit).collect(Collectors.toList());
+		while (true) {
+			if (finishedRents.stream().allMatch(Future::isDone)) {
+				executor.shutdown();
+				break;
+			}
+		}
+	}
+
+	private static Runnable createBicycleRent(Semaphore semaphore, String renterName) {
+		return () -> {
+			try {
+				System.out.printf("%s waits for bicycle\n", renterName);
+				semaphore.acquire();
+				System.out.printf("%s acquired a bicycle\n", renterName);
+				Thread.sleep(1000);
+				System.out.printf("%s returns a bicycle\n", renterName);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			} finally {
+				semaphore.release();
+			}
+		};
+	}
+}
+// output
+/*
+Gimli waits for bicycle
+Gandalf waits for bicycle
+Gandalf acquired a bicycle
+Merry waits for bicycle
+Pippin waits for bicycle
+Legolas waits for bicycle
+Boromir waits for bicycle
+Sam waits for bicycle
+Aragorn waits for bicycle
+Frodo waits for bicycle
+Merry acquired a bicycle
+Gimli acquired a bicycle
+Gandalf returns a bicycle
+Merry returns a bicycle
+Gimli returns a bicycle
+Pippin acquired a bicycle
+Boromir acquired a bicycle
+Legolas acquired a bicycle
+Boromir returns a bicycle
+Legolas returns a bicycle
+Aragorn acquired a bicycle
+Pippin returns a bicycle
+Sam acquired a bicycle
+Frodo acquired a bicycle
+Aragorn returns a bicycle
+Sam returns a bicycle
+Frodo returns a bicycle
+*/
+```
+
+We can use `Semaphore` to control how many bicycles can be ranted at time. In the example above this number equals to 3.
+
+### Exchanger
+Exchanger is used to swap two objects between the thread. Most of all, it is used when the creating of a object used in calculation takes many time, and we want to do it in parallel.
+Lets see the example:
+```java
+public class ExchangerExample {
+
+	public static void main(String[] args) {
+		Exchanger<List<Integer>> exchanger = new Exchanger<>();
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		executor.execute(createRandomNumberListTask(exchanger, 5));
+
+		for (int i = 0; i < 6; i++) {
+			try {
+				List<Integer> randomNumbers = exchanger.exchange(Collections.emptyList());
+				System.out.println("List " + i + ": " + randomNumbers);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		executor.shutdown();
+	}
+
+	private static Runnable createRandomNumberListTask(Exchanger<List<Integer>> exchanger, Integer n) {
+		Random random = new Random();
+		List<Integer> list = new LinkedList<>();
+		return () -> {
+			try {
+				while (!Thread.interrupted()) {
+					for (int i = 0; i < n; i++) {
+						list.add(random.nextInt(99 - 10) + 10);
+					}
+					exchanger.exchange(new ArrayList<>(list));
+					list.clear();
+				}
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		};
+	}
+}
+```
+The list of random integers is created in separate thread, so the main thread can get the sequence quicker.
+
+## Conclusion
