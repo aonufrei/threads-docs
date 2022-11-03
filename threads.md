@@ -1,26 +1,24 @@
-### Plan
-Plan:
-1. Multithreading in Java
-2. Threads
-3. Executors
-4. Error handling
-5. Blocking
-    - Synchronize and Lock
-    - Volatile and Atomic
-    - Wait(), Notify() and NotifyAll()
-    - Blocking queues
-    - Concurrency classes
+# Java Multithreading
 
-TODO: BlockingQueues, Introduction, Conclusion;
+Multithreading is a Java feature that allows concurrent execution of two or more parts of a program for maximum utilization of CPU. Each part of such program is called a thread. This document describes basic concepts of working with threads in Java.
 
-# Multithreading in Java
+## Plan
+1. [Threads](#threads)
+2. [Executors](#executors)
+3. [Synchronize and Lock](#locks)
+4. [wait(), notify() and notifyAll()](#wait-notify)
+5. [Blocking queues](#queues)
+6. [Condition](#condition)
+7. [CountDownLatch](#countdownlatch)
+8. [CyclicBarrier](#cyclicbarrier)
+9. [Semaphore](#semaphore)
+10. [Exchanger](#exchanger)
 
-## What is multithreading?
+<h2 id="threads">Threads</h2>
 
-## Threads
-A Thread is a very light-weighted process, or we can say the smallest part of the process. It can be used to implement some tasks in parallel.
+A Thread is a very light-weight process, or we can say the smallest part of the process. It can be used to implement some tasks in parallel.
 
-All the programs in Java works in at least one thread. When the `main()` method is called the thread called "main" is started.
+All the programs in Java works in at least one thread. For example, when the `main()` method is called, the thread called "main" is started.
 
 Lets review the example of program that uses threads:
 ```java
@@ -48,31 +46,36 @@ public class Main {
 }
 ```
 
-To create a custom thread you need to create new instance of `Thread` class and pass the `Runnable` interface to it. Now use the start() method to execute the thread in parallel.
+To create a custom thread you need to create new instance of `Thread` class and pass the `Runnable` interface to it. Now use the `start()` method to execute the thread in parallel.
 ```java
 Thread myCustomThread = new Thread(...);
 myCustomThread.start();
 ```
 
-The `sleep(1000)` method is used to make the thread to wait for 1000 milliseconds.
+The `sleep()` method is used to make the thread wait for some time.
 
-The `join()` method is used to force the main thread to wait until `myCustomThread` has finished it's execution.
+The `join()` method is used to force the main thread to wait until `myCustomThread` is going to finish it's execution.
 
-`InterruptedException` is the exception that is thrown when the developer interrupts the thread or the program is stopped.
+`InterruptedException` is the exception that is thrown when the developer interrupts the thread using `interrupt()` method.
 
-In order to stop thread execution the one can use `interrupt()` method. In this case, the `InterruptionException` is going to be thrown.
+Java Thread has 4 main states:
+1. New - The thread is newly created.
+2. Runnable - The thread is runnning.
+3. Blocked - The thread is waiting for other thread to take action.
+4. Dead - The thread is terminated.
 
-## Executors
-You can use `Executors` to work with thread in more convenient way. It allows you to execute a single thread or to create pools of thread. To start the thread using `Executor` you need to call `execute()` method and pass the Runnable interface in it;
+<h2 id="executors">Executors</h2>
 
-There are several built in executors:
-1. `Executors.newSingleThreadExecutor()` - is used to create on thread and run it
-2. `Executors.newCachedThreadPool()` - is used to create additional threads as they are required for tasks or to use the existing ones.
-3. `Executors.newFixedThreadPool(numberOfThreadsInPool)` - is used to create a fixed-sized pool of threads and run the tasks.
+You can use `ExecutorService` interface to work with threads in more convenient way. It allows you to execute a single thread or a pool of threads. To start the thread using `ExecutorService` you need to call `execute()` method and pass the `Runnable` to it.
 
-In case the task cannot be executed because there are no available threads in the bool, the task is added to a queue.
+Standard java library provides the developer with following executors:
+1. `Executors.newSingleThreadExecutor()` - creates single thread.
+2. `Executors.newCachedThreadPool()` - creates a pool of threads that can expand the more tasks you are providing to executor.
+3. `Executors.newFixedThreadPool(numberOfThreadsInPool)` - creates a pool of fixed size.
 
-Also, you can create a custom thread pools by creating a new `ThreadPoolExecutor` instance and configuring it.
+In case the task cannot be executed because there are no available threads in the pool, the task would be added to a queue and executed lately (when the threads will be available).
+
+Also, you can create a custom thread pool by creating a new `ThreadPoolExecutor` instance and configuring it.
 
 Following example illustrates the usage of "CachedThreadPool":
 ```java
@@ -101,9 +104,9 @@ public class Main {
 }
 ```
 
-The threads in cached thread pool are created dynamically if needed.
+The threads in cached thread pool are creating dynamically if needed.
 
-You can use `shutdown()` method to stop the execution of the threads in the pool.
+You can use `shutdownNow()` method to stop all threads in a pool (this method calls `interrupt()` for all threads).
 
 Also, the usage of executor allows you to perform the task that returns some response. Here is the example:
 
@@ -146,75 +149,12 @@ public class Main {
 }
 ```
 
-Instead of `Runnable` interface we need to pass `Callable`. In this case you need to use `submit()` method instead of `execute()` to run the thread. `submit()` returns the `Future`, that can be used to get response from the thread. `get()` method blocks the execution of the thread it is called in until the thread is completed.
+In order to create a task that returns value you need to pass the `Callable`.
+You need to use `submit()` method instead of `execute()` to run this kind of task. As a result, you will get a  `Future` object that can be used to get response from the thread. `get()` method blocks the execution of the thread it is called in until the task is completed and returns the response.
 
-If there is a risk of infinite loop in the thread or the thread can never finish the execution it can be better to use the overload of `get()` method to pass the timeout `future.get(1, TimeUnit.MINUTES)`. In this case, if the thread is still not done in this time period, the thread will be interrupted.
+<h2 id="locks">Synchronize and Lock</h2>
 
-
-## Error Handling in threads
-
-You can observe, that it is not possible to catch the exception inside the thread in a usual way.
-
-For example:
-```java
-public class ErrorHandling {
-
-	public static void main(String[] args) {
-		try {
-			Executors.newSingleThreadExecutor(new HandlerThreadFactory())
-				.execute(ErrorHandling::riskyTask);
-		} catch(RuntimeException e) {
-			// will not be called
-			System.out.println("Exception occurred inside the thread");
-		}
-		
-	}
-
-	public static void riskyTask() {
-		System.out.println("Inside riskyTask");
-		throw new RuntimeException("Exception inside the thread");
-	}
-```
-
-This code doesn't work in a way we expect. To catch the `RuntimeException` we need to provide the `Thread` with a `Thread.UncaughtExceptionHandler`.
-
-```java
-public class ErrorHandling {
-
-	public static void main(String[] args) {
-		Executors.newSingleThreadExecutor(new HandlerThreadFactory())
-				.execute(ErrorHandling::riskyTask);
-	}
-
-	public static void riskyTask() {
-		System.out.println("Inside riskyTask");
-		throw new RuntimeException("Exception inside the thread");
-	}
-
-	static class UncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
-		@Override
-		public void uncaughtException(Thread t, Throwable e) {
-			System.out.printf("Exception occurred in thread %s, message [%s]\n", t.getName(), e.getMessage());
-		}
-	}
-
-	static class HandlerThreadFactory implements ThreadFactory {
-		@Override
-		public Thread newThread(Runnable r) {
-			Thread t = new Thread(r);
-			t.setUncaughtExceptionHandler(new UncaughtExceptionHandler());
-			return t;
-		}
-	}
-}
-```
-
-We created the `UncaughtExceptionHandler` class (but you can use lambda instead) to declare what to do when the exception occurred in the thread. After that we created a `HandlerThreadFactory` and are passing it to `executor`. It is made to force the `executor` to create only the thread with `UncaughtExceptionHandler` set as we needed.
-
-This way, the exception is caught by our handler and processed.
-
-## Synchronize and Lock
-When the threads are performing some tasks, it is important to guarantee some resources used by it to not be changed by other thread, because it can cause the code to behave unexpectedly. Java provides mechanisms of blocking the part of code so that only one Thread can access some particular method or resource at time.
+When the threads are performing some tasks, it is important to allow the access to some resource only to one thread at time. Otherwise, the one thread can interfere into the work of other thread and cause upredictive behaviour. Java provides mechanisms to block the part of code so that only one Thread can access some particular resource a time.
 
 Lets review the following example:
 
@@ -257,9 +197,12 @@ public class Blocking {
 */
 ```
 
-As you can see, the threads are using the same method of the same object. As a result, the output numbers are in chaotic sequence, that can produce unexpected behavior in more complex examples. There are two ways to fix it: using `synchronized` or by using `Lock` object.
+As you can see, the threads are using the same method of the same object. As a result, threads are changing the same value simultaneously, that can produce unexpected behavior in more complex examples. There are two ways to fix it using `synchronized` or by using `Lock` object. We will review both approches:
 
-Using synchronized:
+Using `synchronized`:
+
+There are two ways we can rewrite the `utilsMethod` to make
+allow only one thread to execute it a time:
 ```java
 public class Utils {
 
@@ -310,6 +253,7 @@ public class Utils {
 ```
 
 Using `Lock`:
+
 We need to change main method and the Utils class a bit
 ```java
 public class Main {
@@ -322,7 +266,9 @@ public class Main {
 		t2.start();
 	}
 
-    // ...
+	private static Runnable createTask(Utils utils, int startValue) {
+		return () -> utils.utilsMethod(startValue);
+	}
 }
 
 public class Utils {
@@ -350,11 +296,11 @@ public class Utils {
 	}
 ```
 
-It is `lock()` method blocks the part of code from other threads and `unlock()` - unlocks. It is required to use `try-finally` when working in `Lock`. Otherwise, the code will remain blocked and no threads will be able to execute it.
+`lock()` method blocks the part of code from other threads and `unlock()` - unblocks. It is required to use `try-finally` when working in `Lock`. Otherwise, there is a risk your method will be permanently blocked if an exception will occur.
 
-In most cases, it is recommended to use `synchronized` over `Lock`, as it is more secure and is easier to read.
+In most cases, it is recommended to use `synchronized` over `Lock`, as it is more secure and is improves the code readability.
 
-## Wait(), Notify() and NotifyAll()
+<h2 id="wait-notify">wait(), notify() and notifyAll()</h2>
 
 In some cases you'd like to implement one task using multiple threads. For example, you are modelling the process of creating a tea. The steps of creating a tea are:
 1. Pick up a cup
@@ -365,7 +311,7 @@ In some cases you'd like to implement one task using multiple threads. For examp
 
 We will create a separate thread for each procedure.
 
-Java allows to hold execution of some thread using `wait()`, `notify()`, and `notifyAll()` methods. `wait()` is used to stop thread execution until the `notify()` or `notifyAll()` methods are called. These methods are placed in the `Object` class, so all objects in Java contain them. `notifyAll()` should be used, when there are more `wait()` calls in the class (`notify()` resumes the thread only on one of the wait method calls in the class).
+Java allows to stop and resume the execution of some thread using `wait()`, `notify()`, and `notifyAll()` methods. `wait()` is used to stop thread execution until the `notify()` or `notifyAll()` methods are called. These methods are placed in the `Object` class, so all objects in Java contain them. `notifyAll()` should be used, when there are more `wait()` calls in the class.
 
 So now, lets review the example of using these methods to make some tea:
 ```java
@@ -375,15 +321,20 @@ public class TeaProcess {
 		ExecutorService executor = Executors.newFixedThreadPool(5);
 
 		Tea tea = new Tea();
-		executor.execute(createTask("Mix", tea::waitUntilHasWater, tea::mix));
-		executor.execute(createTask("Pour water", tea::waitUntilHasTeaBag, tea::pourWater));
-		executor.execute(createTask("Add tea bag", tea::waitUntilHasSugar, tea::addTeaBag));
-		executor.execute(createTask("Add sugar", tea::waitUntilHasCup, tea::addSugar));
-		executor.execute(createTask("Take a cup", () -> {}, tea::takeACup));
+		List<Future<?>> tasks = new LinkedList<>();
+		tasks.add(executor.submit(createTask("Mix", tea::waitUntilHasWater, tea::mix)));
+		tasks.add(executor.submit(createTask("Pour water", tea::waitUntilHasTeaBag, tea::pourWater)));
+		tasks.add(executor.submit(createTask("Add tea bag", tea::waitUntilHasSugar, tea::addTeaBag)));
+		tasks.add(executor.submit(createTask("Add sugar", tea::waitUntilHasCup, tea::addSugar)));
+		tasks.add(executor.submit(createTask("Take a cup", () -> {}, tea::takeACup)));
 
-		Thread.sleep(6000);
-		System.out.println("Tea is ready: " + tea.isReady());
-		executor.shutdown();
+		while (true) {
+			if (tasks.stream().allMatch(Future::isDone)) {
+				System.out.println("Tea is ready: " + tea.isReady());
+				executor.shutdown();
+				break;
+			}
+		}
 	}
 
 	private static Runnable createTask(String message, Runnable waitMethod, Runnable taskMethod) {
@@ -477,23 +428,305 @@ Tea is ready: true
 *
 ```
 
-It is important to add `wait()` into the while loop, as `notifyAll()` resumes all the threads and we need to stop them again.
+It is important to add `wait()` into the while loop, as `notifyAll()` resumes all the threads and we need to stop them again. In case we use `notify()` method there is a risk that we will resume the thread we are not interested in, so it is more secure to use `notifyAll()`.
 
-Remember to call `wait()`, `notify()`, and `notifyAll()` inside the synchronized block. For example, if you want to call `notifyAll` method for some object x you can do it this way.
+Remember to call `wait()`, `notify()`, and `notifyAll()` inside the synchronized block.
+
+<h2 id="queues">Blocking queue</h2>
+
+In some cases it can be easier to share data between the threads in form of the queue. You can think about it as of the microservice architecture, where the microservice implements some specific task, and the queue is used to send messages between microservices.
+In java you can use `BlockingQueue` interface to achive this kind of effect. It has two main implementations: `ArrayBlockingQueue` and `LinkedBlockingQueue`. When you try to get the value from this queue using `take()` method and the queue is empty, the thread will be blocked untill the element won't be added to the queue.
+Lets review the example of toaster automaton program, that makes a toasts and feed it to the costumer:
+
 ```java
-synchronized(x) {
-	x.notifyAll()
+public class Toaster {
+
+	public static void main(String[] args) {
+		ExecutorService executor = Executors.newFixedThreadPool(3);
+		BlockingQueue<Toast> queueToButter = new LinkedBlockingQueue<>();
+		BlockingQueue<Toast> queueToJam = new LinkedBlockingQueue<>();
+		BlockingQueue<Toast> queueToEater = new LinkedBlockingQueue<>();
+
+		executor.execute(butterTask(queueToButter, queueToJam));
+		executor.execute(jamTask(queueToJam, queueToEater));
+		executor.execute(eaterTask(queueToEater));
+
+		for (int i = 0; i < 10; i++) {
+			try {
+				queueToButter.put(new Toast(i));
+			} catch (InterruptedException e) {
+				System.out.println("Interrupted to insert toast.");
+			}
+		}
+
+		try {
+			Thread.sleep(20000);
+			executor.shutdownNow();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
+
+	}
+
+	private static Runnable butterTask(BlockingQueue<Toast> inQueue, BlockingQueue<Toast> outQueue) {
+		return () -> {
+			try {
+				while (!Thread.interrupted()) {
+					Toast toast = inQueue.take();
+					toast.butter();
+					outQueue.put(toast);
+				}
+			} catch (InterruptedException e) {
+				System.out.println("Butter task is interrupted");
+			}
+		};
+	}
+
+	public static Runnable jamTask(BlockingQueue<Toast> inQueue, BlockingQueue<Toast> outQueue) {
+		return () -> {
+			try {
+				while (!Thread.interrupted()) {
+					Toast toast = inQueue.take();
+					toast.jam();
+					outQueue.put(toast);
+				}
+			} catch (InterruptedException e) {
+				System.out.println("Jam task is interrupted");
+			}
+		};
+	}
+
+	public static Runnable eaterTask(BlockingQueue<Toast> toastQueue) {
+		return () -> {
+			try {
+				while (!Thread.interrupted()) {
+					Toast toast = toastQueue.take();
+					System.out.printf("Toast %s is going to be eaten\n", toast.getId());
+				}
+			} catch (InterruptedException e) {
+				System.out.println("Eater task is interrupted");
+			}
+		};
+	}
 }
+
+class Toast {
+
+	public enum Status {DRY, BUTTERED, JAMMED}
+
+	private final Integer id;
+
+	private Status status = Status.DRY;
+
+	Toast(Integer id) {
+		this.id = id;
+	}
+
+	public void butter() {
+		status = Status.BUTTERED;
+	}
+
+	public void jam() {
+		status = Status.JAMMED;
+	}
+
+	public Integer getId() {
+		return id;
+	}
+
+	public Status getStatus() {
+		return status;
+	}
+}
+// output
+/*
+Toast 0 is going to be eaten
+Toast 1 is going to be eaten
+Toast 2 is going to be eaten
+Toast 3 is going to be eaten
+Toast 4 is going to be eaten
+Toast 5 is going to be eaten
+Toast 6 is going to be eaten
+Toast 7 is going to be eaten
+Toast 8 is going to be eaten
+Toast 9 is going to be eaten
+*/
 ```
-In the example with tea creating these methods where called inside the synchronized methods.
 
-## Blocking queue
+As you can see, there is no explicit synchronization in the code. The `BlockingQueue` handles it itself. 
 
-## Concurrency classes
-`java.util.concurrent` library provide developer with new classes that can be used to ease the process of creating multithreading application. Lets review some of them.
+<h2 id="condition">Condition</h3>
 
-### CountDownLatch
-CountDownLatch object can be used to set some kind of a countdown and force the threads to wait until the it is out.
+`Condition` is a class that contains `await()`, `signal()` and `signalAll()` methods. They are used as `wait()`, `notify()`, and `notifyAll()` objects methods from `Object` class respectively. In order to create an instance of this class you need to call `newCondition()` method of a `Lock`. Lets rewrite `TeaProcess` example to work with `Condition` instead:
+
+
+```java
+public class TeaProcessWithCondition {
+
+	public static void main(String[] args) {
+		ExecutorService executor = Executors.newFixedThreadPool(5);
+
+		Tea tea = new Tea();
+		List<Future<?>> tasks = new LinkedList<>();
+		tasks.add(executor.submit(createTask("Mix", tea::waitUntilHasWater, tea::mix)));
+		tasks.add(executor.submit(createTask("Pour water", tea::waitUntilHasTeaBag, tea::pourWater)));
+		tasks.add(executor.submit(createTask("Add tea bag", tea::waitUntilHasSugar, tea::addTeaBag)));
+		tasks.add(executor.submit(createTask("Add sugar", tea::waitUntilHasCup, tea::addSugar)));
+		tasks.add(executor.submit(createTask("Take a cup", () -> {}, tea::takeACup)));
+
+		while (true) {
+			if (tasks.stream().allMatch(Future::isDone)) {
+				System.out.println("Tea is ready: " + tea.isReady());
+				executor.shutdown();
+				break;
+			}
+		}
+	}
+
+	private static Runnable createTask(String message, Runnable waitMethod, Runnable taskMethod) {
+		return () -> {
+			try {
+				Thread.sleep(1000);
+				waitMethod.run();
+				System.out.println(message);
+				taskMethod.run();
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		};
+	}
+
+	static class Tea {
+
+		private enum Step {NONE, CUP, SUGAR, TEA_BAG, WATER, MIXED}
+		private Step currentStep = Step.NONE;
+
+		private static final Lock lock = new ReentrantLock();
+		private static final Condition cupIsReady = lock.newCondition();
+		private static final Condition sugarIsReady = lock.newCondition();
+		private static final Condition teaBagIsReady = lock.newCondition();
+
+		private static final Condition waterIsReady = lock.newCondition();
+
+		public Tea() {
+		}
+
+		public void takeACup() {
+			lock.lock();
+			try {
+				currentStep = Step.CUP;
+				cupIsReady.signalAll();
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void addSugar() {
+			lock.lock();
+			try {
+				currentStep = Step.SUGAR;
+				sugarIsReady.signalAll();
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void addTeaBag() {
+			lock.lock();
+			try {
+				currentStep = Step.TEA_BAG;
+				teaBagIsReady.signalAll();
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void pourWater() {
+			lock.lock();
+			try {
+				currentStep = Step.WATER;
+				waterIsReady.signalAll();
+
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void mix() {
+			lock.lock();
+			currentStep = Step.MIXED;
+			lock.unlock();
+		}
+
+		public void waitUntilHasCup() {
+			lock.lock();
+			try {
+				cupIsReady.await();
+			} catch (InterruptedException e) {
+				System.out.println("Wait unit has cup was interrupted");
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void waitUntilHasSugar() {
+			lock.lock();
+			try {
+				sugarIsReady.await();
+			} catch (InterruptedException e) {
+				System.out.println("Wait unit has sugar was interrupted");
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void waitUntilHasTeaBag() {
+			lock.lock();
+			try {
+				teaBagIsReady.await();
+			} catch (InterruptedException e) {
+				System.out.println("Wait unit has tea bag was interrupted");
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public void waitUntilHasWater() {
+			lock.lock();
+			try {
+				waterIsReady.await();
+			} catch (InterruptedException e) {
+				System.out.println("Wait unit has water was interrupted");
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		public boolean isReady() {
+			lock.lock();
+			try {
+				return currentStep == Step.MIXED;
+			} finally {
+				lock.unlock();
+			}
+		}
+	}
+}
+// output
+/*
+Take a cup
+Add sugar
+Add tea bag
+Pour water
+Mix
+Tea is ready: true
+*/
+```
+By using `Condition` you can assign `wait()` method calls to some specific condition that makes it easier to develop more complex multithreading applications. The drawback of using `Condition` is that you are forced to use `Lock` class indead of `syncronized` blocks.
+
+<h2 id="countdownlatch">CountDownLatch</h2>
+
+`CountDownLatch` object can be used to set some kind of a countdown and force the threads to wait until the countdown reaches zero.
 
 Lets review the code example:
 ```java
@@ -548,15 +781,15 @@ All tasks are completed
 */
 ```
 
-In this example `CountDownLatch` is used to wait till the the specific number of tasks will be finished. `await()` blocks the execution of the thread till the countdown is out. `countDown()` reduces the countdown by one. To reset the countdown you need to create new instance of the class.
+Here `CountDownLatch` is used to wait utill the the specific number of tasks will be finished. `await()` blocks the execution of the thread utill the countdown is out. `countDown()` metods is used reduces the countdown by one. To reset the countdown you need to create new instance of the class.
 
-### CyclicBarrier
+<h2 id="cyclicbarrier">CyclicBarrier</h2>
 
-`CyclicBarrier` is very similar to `CountDownLatch` but can be used multiple times. The constructor is very simple. It takes the number of threads that must call `await()` till the thread will be unblocked;
+`CyclicBarrier` is very similar to `CountDownLatch` but can be used multiple times. The constructor is very simple. It takes the number of threads that must call `await()` utill the thread will be unblocked;
 ```java
 public CyclicBarrier(int parties)
 ```
-Optionally, you can pass the second argument to the constructor, which is a Runnable instance. This way, runnable will be executed when the last thread call `await()` method.
+Optionally, you can pass the second argument to the constructor, which is a Runnable instance. This way, runnable will be executed when the last thread will call `await()` method.
 
 Lets see the example:
 ```java
@@ -596,10 +829,11 @@ public class CyclicBarrierExample {
 
 }
 ```
-The threads are blocked thill the required thread number are not waiting.
+The threads are blocked untill the required number of threads are not waiting.
 
-### Semaphore
-When `Lock` and `synchronized` allows access to resource only to one thread at time, `Semaphore` can be used to do it for multiple threads.
+<h2 id="semaphore">Semaphore</h2>
+
+When `Lock` and `synchronized` allows access to resource only to one thread a time, `Semaphore` can be used to do it for multiple threads.
 
 Lets illustrate the work of `Semaphore` by developing a simple bicycle renting program.
 ```java
@@ -680,9 +914,11 @@ Frodo returns a bicycle
 
 We can use `Semaphore` to control how many bicycles can be ranted at time. In the example above this number equals to 3.
 
-### Exchanger
-Exchanger is used to swap two objects between the thread. Most of all, it is used when the creating of a object used in calculation takes many time, and we want to do it in parallel.
+<h3 id="exchanger">Exchanger</h2>
+Exchanger is used to swap two objects between the threads. Most of all, it is used when the creating of an object used in calculation takes many time, and we want to speed it up.
+
 Lets see the example:
+
 ```java
 public class ExchangerExample {
 
@@ -722,6 +958,6 @@ public class ExchangerExample {
 	}
 }
 ```
-The list of random integers is created in separate thread, so the main thread can get the sequence quicker.
 
-## Conclusion
+
+The list of random integers is created in separate thread, so the main thread performs the required task faster.
